@@ -9,7 +9,14 @@
 
 ## API サーバー（FastAPI）
 
-`main.py/app` にインメモリのタスク API を用意しています。`/tasks` 以下に CRUD エンドポイントがあり、稼働状態確認用の `/health` も提供します。
+`main.py/app` に FastAPI エントリーポイントを配置し、以下のようにコンポーネントを分割しています。
+
+- `main.py/models.py`: Pydantic ベースの `Task`/`TaskCreate`/`TaskUpdate` モデル
+- `main.py/store.py`: インメモリの永続化レイヤーとデモデータ投入
+- `main.py/routes.py`: `APIRouter` で CRUD エンドポイントを定義
+- `main.py/app`: 上記を組み合わせて `FastAPI` インスタンスを生成し、エントリーポイントとして `main()` を公開
+
+`/tasks` 以下に CRUD エンドポイントがあり、稼働状態確認用の `/health` も提供します。
 
 ### サーバーの起動方法
 

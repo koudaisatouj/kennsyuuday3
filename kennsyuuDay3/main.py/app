@@ -1,126 +1,37 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
+
+from routes import create_task_router
+from store import TaskStore
 
 
-class TaskBase(BaseModel):
-    title: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
-    completed: bool = False
+def create_app() -> FastAPI:
+    store = TaskStore()
+    store.seed_demo_data()
+
+    app = FastAPI(
+        title="Training Day 3 API",
+        description="Simple task management endpoints built with FastAPI.",
+        version="0.1.0",
+    )
+
+    app.include_router(create_task_router(store))
+
+    @app.get("/health", tags=["Utility"])
+    def health_check() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return app
 
 
-class TaskCreate(TaskBase):
-    """Payload used when a client creates a brand-new task."""
+app = create_app()
 
 
-class TaskUpdate(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
-    completed: Optional[bool] = None
-
-
-class Task(TaskBase):
-    id: int
-
-
-class TaskStore:
-    """Minimal in-memory persistence so the API feels realistic."""
-
-    def __init__(self) -> None:
-        self._items: Dict[int, Task] = {}
-        self._next_id: int = 1
-
-    def list(self) -> List[Task]:
-        return list(self._items.values())
-
-    def get(self, item_id: int) -> Optional[Task]:
-        return self._items.get(item_id)
-
-    def create(self, payload: TaskCreate) -> Task:
-        task = Task(id=self._next_id, **payload.model_dump())
-        self._items[task.id] = task
-        self._next_id += 1
-        return task
-
-    def update(self, item_id: int, payload: TaskUpdate) -> Optional[Task]:
-        current = self._items.get(item_id)
-        if current is None:
-            return None
-
-        updated_data = payload.model_dump(exclude_unset=True)
-        updated_task = current.model_copy(update=updated_data)
-        self._items[item_id] = updated_task
-        return updated_task
-
-    def delete(self, item_id: int) -> Optional[Task]:
-        return self._items.pop(item_id, None)
-
-
-store = TaskStore()
-
-# Seed the store with a couple of demo tasks so users can query immediately.
-store.create(TaskCreate(title="Set up FastAPI server", completed=True))
-store.create(TaskCreate(title="Connect React app to API", description="Use fetch/axios"))
-
-app = FastAPI(
-    title="Training Day 3 API",
-    description="Simple task management endpoints built with FastAPI.",
-    version="0.1.0",
-)
-
-
-@app.get("/health", tags=["Utility"])
-def health_check() -> Dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/tasks", response_model=List[Task], tags=["Tasks"])
-def list_tasks() -> List[Task]:
-    return store.list()
-
-
-@app.get("/tasks/{task_id}", response_model=Task, tags=["Tasks"])
-def get_task(task_id: int) -> Task:
-    task = store.get(task_id)
-    if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
-    return task
-
-
-@app.post("/tasks", response_model=Task, status_code=status.HTTP_201_CREATED, tags=["Tasks"])
-def create_task(payload: TaskCreate) -> Task:
-    return store.create(payload)
-
-
-@app.put("/tasks/{task_id}", response_model=Task, tags=["Tasks"])
-def update_task(task_id: int, payload: TaskUpdate) -> Task:
-    updated = store.update(task_id, payload)
-    if updated is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
-    return updated
-
-
-@app.delete(
-    "/tasks/{task_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["Tasks"],
-)
-def delete_task(task_id: int) -> None:
-    deleted = store.delete(task_id)
-    if deleted is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
+def main() -> None:
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
-    # Running via `python main.py/app` keeps the command memorable for trainees.
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    main()
